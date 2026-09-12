@@ -57,6 +57,12 @@ generate the master key once with:
 openssl rand -base64 64 | tr -d '\n' > /run/secrets/penpot-secret-key
 ```
 
+That gets you running, but don't hand-place secrets on a real machine.
+Use [agenix](https://github.com/ryantm/agenix) or
+[sops-nix](https://github.com/Mic92/sops-nix) to manage the key (and the
+other `*File` passwords) properly, then just point `secretKeyFile` at the
+path they decrypt to.
+
 Commonly tuned options (all documented inline in
 [`modules/penpot.nix`](modules/penpot.nix)):
 
