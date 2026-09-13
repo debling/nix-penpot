@@ -1,6 +1,11 @@
 {
   description = "Nix packages and NixOS module for self-hosting Penpot";
 
+  nixConfig = {
+    extra-substituters = [ "https://nix-penpot.cachix.org" ];
+    extra-trusted-public-keys = [ "nix-penpot.cachix.org-1:cbXoCSnLa6QmBex5EYzUSsswqSZA6RvJWl0dR+WgOns=" ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
