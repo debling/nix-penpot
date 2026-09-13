@@ -33,10 +33,28 @@
         "type": "github"
       }
     },
+    "penpot-files": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1788774984,
+        "narHash": "sha256-xNgDTAIYupQciwKWGVVjtYdC8d0QM4nQgBOMNxkVKxw=",
+        "owner": "penpot",
+        "repo": "penpot-files",
+        "rev": "9b4e388b60af7bafa37c0603d94a48773f928f17",
+        "type": "github"
+      },
+      "original": {
+        "owner": "penpot",
+        "ref": "main",
+        "repo": "penpot-files",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "nixpkgs": "nixpkgs",
-        "penpot": "penpot"
+        "penpot": "penpot",
+        "penpot-files": "penpot-files"
       }
     }
   },

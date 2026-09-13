@@ -1,7 +1,7 @@
 # Penpot backend (Clojure API server), packaged as the upstream source
 # uberjar. Reproduces `backend/scripts/build`: a non-AOT uberjar executed
 # through `clojure.main`, shipped with the log4j2 config and the onboarding
-# template files prefetched from penpot/penpot-files.
+# template files mapped from the pinned penpot-files flake input.
 #
 # Output contract:
 #   $out/share/penpot-backend/{penpot.jar,log4j2.xml,version.txt,manage.py}
@@ -21,11 +21,10 @@
   woff2,
   fontconfig,
   python3,
-  curl,
-  cacert,
   git,
   stripJavaArchivesHook,
   penpot,
+  penpot-files,
   version,
   subSrc,
 }:
@@ -87,29 +86,62 @@ let
 
     nativeBuildInputs = [
       babashka
-      curl
     ];
-
-    impureEnvVars = lib.fetchers.proxyImpureEnvVars;
-
-    # bb.curl shells out to the curl binary, which has no CA bundle in the
-    # sandbox.
-    SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
-    NIX_SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
 
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    # On a penpot input bump: set to lib.fakeHash, build once, copy the
-    # `got:` hash from the failure message.
+    # The file contents come from the pinned penpot-files flake input, so
+    # this hash only changes when that input (or the template list in
+    # onboarding.edn) changes. On a penpot input bump: run
+    # `nix flake update penpot-files` first (a missing file fails the build
+    # loudly), then set to lib.fakeHash, build once, copy the `got:` hash
+    # from the failure message.
     outputHash = "sha256-b03i34xCfKHie5AjT7is3o9kqIzcSU/nPl7mV1gu+u0=";
     dontFixup = true;
 
     dontBuild = true;
 
     installPhase = ''
+      runHook preInstall
+
       export HOME="$TMPDIR/home"
-      mkdir -p "$out/templates"
-      bb scripts/prefetch-templates.clj resources/app/onboarding.edn "$out/templates"
+      mkdir -p "$HOME"
+
+      # Map onboarding.edn (id, file-uri) pairs to files from the pinned
+      # penpot-files input. EDN-native parsing via babashka; basenames are
+      # URL-decoded (upstream file-uris contain %20 etc.).
+      cat > "$TMPDIR/map-templates.clj" <<'EOF'
+      (require '[babashka.fs :as fs]
+               '[clojure.edn :as edn]
+               '[clojure.string :as str])
+      (import '[java.net URLDecoder])
+
+      (let [[defs-path files-dir dest] *command-line-args*
+            data (edn/read-string (slurp defs-path))]
+        (fs/create-dirs dest)
+        (doseq [{:keys [id file-uri]} data]
+          ;; Basename of file-uri, minus any query/fragment; literal `+`
+          ;; is protected before URL-decoding (`URLDecoder` maps `+` to
+          ;; space, but upstream names use `%20` for spaces).
+          (let [fname (-> file-uri
+                          (str/split #"/") last
+                          (str/split #"[?#]") first
+                          (str/replace "+" "%2B")
+                          (URLDecoder/decode "UTF-8"))
+                src-file (fs/file files-dir fname)]
+            (when-not (fs/exists? src-file)
+              (println (format "template file %s (id: %s) not found" fname id))
+              (System/exit 1))
+            (println (format "=> installing %s" id))
+            (fs/copy src-file (fs/file dest id)))))
+      EOF
+
+      bb "$TMPDIR/map-templates.clj" \
+        resources/app/onboarding.edn \
+        "${penpot-files}" \
+        "$out/templates"
+
+      runHook postInstall
     '';
   };
 in

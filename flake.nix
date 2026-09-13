@@ -13,6 +13,13 @@
 
     penpot.url = "github:penpot/penpot/2.17.2";
     penpot.flake = false;
+
+    # Onboarding template files fetched by the backend build. No tags
+    # upstream, so track main; the locked rev makes it immutable. Bump with
+    # `nix flake update penpot-files` (see builtinTemplates in
+    # packages/backend.nix for the rehash procedure).
+    penpot-files.url = "github:penpot/penpot-files/main";
+    penpot-files.flake = false;
   };
 
   outputs =
@@ -20,6 +27,7 @@
       self,
       nixpkgs,
       penpot,
+      penpot-files,
     }:
     let
       systems = [
@@ -89,7 +97,7 @@
         in
         {
           penpot-backend = callPackage ./packages/backend.nix {
-            inherit penpot;
+            inherit penpot penpot-files;
             version = penpotVersion;
             inherit (self.lib) subSrc;
           };
