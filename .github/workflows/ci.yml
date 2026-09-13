@@ -18,7 +18,7 @@ jobs:
           # Nothing to push from the eval-only check; PRs pull read-only.
           skipPush: true
       - run: nix flake check --no-build --print-build-logs
-      - run: nix fmt -- --check $(git ls-files '*.nix')
+      - run: nix fmt -- --fail-on-change $(git ls-files '*.nix')
 
   build:
     strategy:

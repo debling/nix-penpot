@@ -3,7 +3,9 @@
 
   nixConfig = {
     extra-substituters = [ "https://nix-penpot.cachix.org" ];
-    extra-trusted-public-keys = [ "nix-penpot.cachix.org-1:cbXoCSnLa6QmBex5EYzUSsswqSZA6RvJWl0dR+WgOns=" ];
+    extra-trusted-public-keys = [
+      "nix-penpot.cachix.org-1:cbXoCSnLa6QmBex5EYzUSsswqSZA6RvJWl0dR+WgOns="
+    ];
   };
 
   inputs = {

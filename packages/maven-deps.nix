@@ -28,10 +28,6 @@
       # Copy the project cpcache (tools.deps writes it into the working
       # directory, not HOME) so the main build can skip resolution entirely.
       keepCpcache ? false,
-      # Scrub resolver bookkeeping instead of deleting it: the cpcache
-      # replay path expects the files to exist (only hash-bearing comment
-      # lines are removed).
-      scrubM2 ? false,
       # Extra source patching applied before resolution (e.g. pinning
       # "RELEASE" deps in deps.edn).
       postPatch ? "",
@@ -82,23 +78,20 @@
           (cd ${workDir} && clojure -P ${alias})
         '') warmAliases}
 
-        # Normalize timestamp-bearing maven bookkeeping files so the
-        # fixed-output hash is stable (the classpath itself is unaffected).
-      ''
-      + (
-        if scrubM2 then
-          ''
-            find "$HOME/.m2" -name '_remote.repositories' \
-              -exec sed -i '/^#/d' {} +
-            find "$HOME/.m2" -name 'resolver-status.properties' \
-              -exec sed -i -E '/^#/d; s/\.lastUpdated=[0-9]+/.lastUpdated=0/' {} +
-          ''
-        else
-          ''
-            find "$HOME/.m2" -name '_remote.repositories' -type f -delete
-          ''
-      )
-      + ''
+        # Delete Maven resolver bookkeeping unconditionally so the
+        # fixed-output hash is stable: these files record wall-clock fetch
+        # behavior (resolver-status.properties carries
+        # `.lastUpdated=<epoch-ms>` timestamps, `*.lastUpdated` markers
+        # record failed lookups, `maven-metadata*` tracks mutable version
+        # listings, and `_remote.repositories` records which remote each
+        # artifact came from). Offline reuse only needs the real artifacts
+        # (`*.jar`, `*.pom`), which are kept verbatim.
+        find "$HOME/.m2" \
+          \( -name '_remote.repositories' \
+          -o -name '_maven.repositories' \
+          -o -name 'resolver-status.properties' \
+          -o -name '*.lastUpdated' \
+          -o -name 'maven-metadata*' \) -type f -delete
 
         # Uninstall gitlibs content that breaks fixed-output hashing:
         # worktree admin files embed mtimes/absolute builder paths, sample

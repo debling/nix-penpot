@@ -101,9 +101,8 @@ let
     workDir = "frontend";
     warmAliases = [ "-M:dev:shadow-cljs" ];
     keepCpcache = true;
-    scrubM2 = true;
     postPatch = pinDepsEdn;
-    outputHash = "sha256-Q7fukU4vPwgGUCQq/PMErzsRzrA6lyFG1fkQENcoRkU=";
+    outputHash = "sha256-VnI8pkouMU2GR7svLdF6MEkDwD4qirSBCw0mlkYr0iE=";
   };
 in
 stdenvNoCC.mkDerivation {
