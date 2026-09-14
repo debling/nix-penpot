@@ -83,7 +83,7 @@ let
     ];
     workDir = "exporter";
     warmAliases = [ "-M:dev" ];
-    outputHash = "sha256-QgH7ewCHGeaWXX3cU6V5+d/VklqFegNsI/MMmU1polA=";
+    outputHash = "sha256-0WBDh+leRpDyQtdtrQ2tDs5Kbn83ENurHKGXZqKWtZI=";
   };
 
   magickPolicy = callPackage ./imagemagick-policy.nix { inherit penpot; };

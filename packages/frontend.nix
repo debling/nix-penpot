@@ -102,7 +102,7 @@ let
     warmAliases = [ "-M:dev:shadow-cljs" ];
     keepCpcache = true;
     postPatch = pinDepsEdn;
-    outputHash = "sha256-VnI8pkouMU2GR7svLdF6MEkDwD4qirSBCw0mlkYr0iE=";
+    outputHash = "sha256-nO7WooVlGTp0zxSuLb87Ug9SFqKeHeuOWLU24zwj6AM=";
   };
 in
 stdenvNoCC.mkDerivation {

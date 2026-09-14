@@ -101,6 +101,39 @@
         find "$HOME/.gitlibs/_repos" -type d -name hooks -exec rm -rf {} +
         find "$HOME/.gitlibs/libs" -name '.git' -type f -delete
 
+        # Canonicalize git object stores so the fixed-output hash is stable
+        # across fetches. The server generates a fresh pack per fetch
+        # (different deltas/object order), and plain `git repack` reuses
+        # incoming deltas, so received packs flow through byte-identically
+        # into the output. A full single-threaded re-deltification
+        # (`-f`, fixed window/depth/threads) is a pure function of the
+        # object set instead. FETCH_HEAD/logs/commit-graphs/server-info are
+        # fetch-session state that offline resolution never reads.
+        # packed-refs is pruned to tags: coords only reference :git/tag or
+        # :git/sha, while branches/pulls move upstream and would drift the
+        # hash on every upstream push.
+        for repo in "$HOME"/.gitlibs/_repos/*/*/*/*/; do
+          [ -d "$repo/objects" ] || continue
+          # .keep files protect packs from consolidation; remove first.
+          rm -f "$repo"/objects/pack/*.keep
+          # repack.updateServerInfo=false: repack would otherwise write
+          # info/refs + objects/info/packs (dumb-HTTP server state listing
+          # every branch/pull — same drift as packed-refs, and never read
+          # offline). Deleted defensively below as well.
+          git --git-dir="$repo" -c pack.threads=1 -c repack.updateServerInfo=false \
+            repack -a -d -f --window=50 --depth=50 || exit 1
+          rm -rf "$repo/FETCH_HEAD" "$repo/logs" "$repo/info/refs" \
+            "$repo/objects/info/packs" \
+            "$repo/objects/info/commit-graph" \
+            "$repo/objects/info/commit-graphs" \
+            "$repo/objects/info/commit-graphs-v1"
+          if [ -f "$repo/packed-refs" ]; then
+            awk 'BEGIN{keep=0} /^#/{print; next} / refs\/tags\//{print; keep=1; next} /^\^/{if(keep)print; keep=0; next} {keep=0}' \
+              "$repo/packed-refs" > "$repo/packed-refs.tmp" || exit 1
+            mv "$repo/packed-refs.tmp" "$repo/packed-refs"
+          fi
+        done
+
         mkdir -p "$out"
         mv "$HOME/.m2" "$out/m2"
         mv "$HOME/.gitlibs" "$out/gitlibs"

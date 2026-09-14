@@ -77,7 +77,7 @@ let
       "-M:build"
       "-T:build"
     ];
-    outputHash = "sha256-QV0L59DrWdRDCyV+eVQ0uJwCoe21+8Jcj4LFkwFOvmM=";
+    outputHash = "sha256-BJVONmYwNjqsqpeNJILAnjxNUlV0gQ9OS2s8N+6mD7s=";
   };
 
   builtinTemplates = stdenv.mkDerivation {
