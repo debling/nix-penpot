@@ -197,6 +197,13 @@ let
     PENPOT_INTERNAL_URI = cfg.exporter.internalUri;
     PENPOT_REDIS_URI = redisUri;
     PENPOT_TEMPDIR = "/run/penpot-exporter";
+    # Chromium's crashpad needs a writable $HOME even with --disable-breakpad
+    # (it writes its crash database below it at startup). ProtectSystem=strict
+    # leaves the service user's passwd home (/var/lib/penpot) read-only, so
+    # every browser launch would die with SIGTRAP and exhaust the exporter's
+    # browser pool ("ResourceRequest timed out"). Point HOME at the unit's
+    # writable RuntimeDirectory instead.
+    HOME = "/run/penpot-exporter";
     # NOTE: the exporter's http server ignores this variable (it always
     # binds all interfaces); loopback isolation is enforced by the unit's
     # IPAddressAllow/IPAddressDeny below.
