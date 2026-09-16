@@ -21,7 +21,6 @@
   woff2,
   fontconfig,
   python3,
-  git,
   stripJavaArchivesHook,
   penpot,
   penpot-files,
@@ -62,23 +61,9 @@ let
     fontconfig
   ];
 
-  # Pre-seed all dependency downloads (maven repo + gitlibs checkouts) in a
-  # fixed-output derivation so the jar build itself stays fully offline.
-  # Three classpaths are warmed: plain root deps (for build.clj's
-  # create-basis), the :build alias, and the -T:build tool classpath,
-  # version conflicts resolve differently for each, so all three must be
-  # pre-fetched.
-  mavenDeps = (callPackage ./maven-deps.nix { }).mkMavenDeps {
-    pname = "penpot-backend";
-    inherit version src;
-    workDir = "backend";
-    warmAliases = [
-      ""
-      "-M:build"
-      "-T:build"
-    ];
-    outputHash = "sha256-BJVONmYwNjqsqpeNJILAnjxNUlV0gQ9OS2s8N+6mD7s=";
-  };
+  # Offline Clojure dependencies: eval-time cache from deps-lock.json
+  # (no fixed-output derivation) + fake-git shim + short-SHA expansion.
+  cljOffline = callPackage ./clj-offline.nix { };
 
   builtinTemplates = stdenv.mkDerivation {
     name = "penpot-backend-builtin-templates";
@@ -151,7 +136,8 @@ stdenv.mkDerivation {
 
   nativeBuildInputs = [
     clojureJdk25
-    git
+    cljOffline.fake-git
+    cljOffline.clj-builder
     makeWrapper
     # Repacks the jar deterministically during fixup (the uber task stamps
     # entries with wall-clock time).
@@ -161,13 +147,8 @@ stdenv.mkDerivation {
   configurePhase = ''
     runHook preConfigure
 
-    export HOME="$TMPDIR/home"
-    mkdir -p "$HOME"
-    ln -s "${mavenDeps}/m2" "$HOME/.m2"
-    ln -s "${mavenDeps}/gitlibs" "$HOME/.gitlibs"
-    # Keep JVM user.home in sync with HOME so dependency resolution uses
-    # the pre-seeded .m2/.gitlibs (see mavenDeps).
-    export JDK_JAVA_OPTIONS="-Duser.home=$HOME"
+    # Offline dependency resolution from the eval-time clj-nix cache.
+    ${cljOffline.setup}
 
     runHook postConfigure
   '';
@@ -232,7 +213,7 @@ stdenv.mkDerivation {
   '';
 
   passthru = {
-    inherit mavenDeps builtinTemplates;
+    inherit builtinTemplates;
     version = version;
   };
 

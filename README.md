@@ -146,10 +146,29 @@ nix develop                                       # devshell
 ## Updating Penpot
 
 Bump the `penpot` input (e.g. `nix flake lock --update-input penpot` or pin
-a new tag in `flake.nix`). Dependency caches are hash-pinned fixed-output
-derivations; on a bump, set their `hash`/`outputHash` to `lib.fakeHash`,
-build, and copy the `got:` hash from the failure, the spots are documented
-in each file under [`packages/`](packages/).
+a new tag in `flake.nix`). Then regenerate the Clojure dependency lock:
+
+```bash
+# 1. copy the penpot source somewhere writable and re-apply the RELEASE
+#    pins from packages/frontend.nix (pinDepsEdn) so the lock matches
+#    exactly what the builds resolve
+# 2. from that copy, run the clj-nix lock generator over the built modules:
+nix run github:jlesquembre/clj-nix/<pinned-rev>#deps-lock -- \
+  --deps-include backend/deps.edn --deps-include common/deps.edn \
+  --deps-include frontend/deps.edn --deps-include exporter/deps.edn \
+  --alias-exclude outdated --alias-exclude jvm-repl
+# 3. if any warmed git dependency gained a version that loses a conflict
+#    (e.g. a library's transitive git pin), add its full rev + tree hash +
+#    ancestor metadata to the lock's git-deps (see existing entries)
+# 4. copy the resulting deps-lock.json over the repo-root one and rebuild
+```
+
+`deps-lock.json` pins every Maven artifact (content hash) and git dep
+(full rev + tree hash), so builds resolve fully offline from the eval-time
+cache — no network fetches, no hash drift. pnpm stores under
+[`packages/`](packages/) are still hash-pinned fixed-output derivations;
+on a bump, set their `hash` to `lib.fakeHash`, build, and copy the `got:`
+hash.
 
 ## License
 

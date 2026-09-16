@@ -24,7 +24,6 @@
   pnpm_11,
   clojure,
   jdk25_headless,
-  git,
   rsync,
   patchelf,
   fetchPnpmDeps,
@@ -50,10 +49,6 @@ let
   ];
   pluginsSrc = subSrc penpot [ "plugins" ];
   mcpSrc = subSrc penpot [ "mcp" ];
-  clojureSrc = subSrc penpot [
-    "frontend"
-    "common"
-  ];
 
   # One pnpm store per workspace (fetched once, reused for the offline
   # installs in the main build via pnpmConfigHook).
@@ -80,8 +75,8 @@ let
   # needs a newer JDK than the one the clojure CLI wrapper ships with.
   clojureJdk25 = clojure.override { jdk = jdk25_headless; };
 
-  # Upstream leaves a few dev deps on "RELEASE"; pin them so both the
-  # dependency fetch below and the (offline) shadow-cljs build resolve
+  # Upstream leaves a few dev deps on "RELEASE"; pin them so the lockfile
+  # generation and the (offline) shadow-cljs build resolve the same
   # deterministic, purely local maven versions.
   pinDepsEdn = ''
     sed -i frontend/deps.edn \
@@ -90,20 +85,10 @@ let
       -e 's|com.bhauman/rebel-readline {:mvn/version "RELEASE"}|com.bhauman/rebel-readline {:mvn/version "0.1.11"}|'
   '';
 
-  # Maven, gitlibs and classpath caches warming `clojure -P -M:dev:shadow-cljs`.
-  # The cpcache (which embeds $HOME paths) lets the main build skip
-  # dependency resolution entirely: upstream uses short git shas, whose
-  # canonicalization would otherwise need network access.
-  mavenDeps = (callPackage ./maven-deps.nix { }).mkMavenDeps {
-    pname = "penpot-frontend";
-    inherit version;
-    src = clojureSrc;
-    workDir = "frontend";
-    warmAliases = [ "-M:dev:shadow-cljs" ];
-    keepCpcache = true;
-    postPatch = pinDepsEdn;
-    outputHash = "sha256-nO7WooVlGTp0zxSuLb87Ug9SFqKeHeuOWLU24zwj6AM=";
-  };
+  # Offline Clojure dependencies: eval-time cache from deps-lock.json
+  # (no fixed-output derivation) + fake-git shim + short-SHA expansion.
+  # Resolution runs offline from the cache on every build; no cpcache needed.
+  cljOffline = callPackage ./clj-offline.nix { };
 in
 stdenvNoCC.mkDerivation {
   pname = "penpot-frontend";
@@ -115,7 +100,8 @@ stdenvNoCC.mkDerivation {
     pnpm_11
     pnpmConfigHook
     clojureJdk25
-    git
+    cljOffline.fake-git
+    cljOffline.clj-builder
     rsync
     patchelf
   ];
@@ -179,21 +165,8 @@ stdenvNoCC.mkDerivation {
     (cd plugins/libs/plugins-runtime && pnpm run build)
     (cd plugins && pnpm run build:plugins)
 
-    # 4. Main cljs build with the pre-seeded clojure caches.
-    export HOME="$NIX_BUILD_TOP/home"
-    mkdir -p "$HOME/.clojure"
-    export JAVA_TOOL_OPTIONS="-Duser.home=$HOME"
-    cp -r ${mavenDeps}/m2 "$HOME/.m2"
-    cp -r ${mavenDeps}/gitlibs "$HOME/.gitlibs"
-    chmod -R u+w "$HOME/.m2" "$HOME/.gitlibs"
-    cp -r ${mavenDeps}/cpcache frontend/.cpcache
-    chmod -R u+w frontend/.cpcache
-    # Pre-seed the user deps.edn (the CLI would copy its example otherwise)
-    # and refresh the cache mtimes so the CLI's `-nt` staleness check does
-    # not force a (network) re-resolution.
-    echo '{}' > "$HOME/.clojure/deps.edn"
-    touch -d '2000-01-01' "$HOME/.clojure/deps.edn"
-    touch frontend/.cpcache/*
+    # 4. Main cljs build, resolving offline from the eval-time clj-nix cache.
+    ${cljOffline.setup}
 
     (cd frontend && pnpm run build:app:main)
     (cd frontend && pnpm run build:app:libs)

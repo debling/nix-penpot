@@ -14,6 +14,15 @@
     penpot.url = "github:penpot/penpot/2.17.2";
     penpot.flake = false;
 
+    # Clojure dependency locking (deps-lock.json) + eval-time dep cache
+    # (mk-deps-cache) + offline git shim (fake-git). Pinned to a main
+    # commit: the only release (0.4.0, 2024) predates our toolchain.
+    # Consumed as a dependency only (EPL-2.0 stays upstream of our MIT code).
+    # Only the overlay's clojure helpers are used (mk-deps-cache, fake-git,
+    # deps-lock, clj-builder); clj-nix's own apps/devshells stay unevaluated.
+    clj-nix.url = "github:jlesquembre/clj-nix/2b1290ee56e9bbd50e9b5874c985d34ad2f1b458";
+    clj-nix.inputs.nixpkgs.follows = "nixpkgs";
+
     # Onboarding template files fetched by the backend build. No tags
     # upstream, so track main; the locked rev makes it immutable. Bump with
     # `nix flake update penpot-files` (see builtinTemplates in
@@ -28,6 +37,7 @@
       nixpkgs,
       penpot,
       penpot-files,
+      clj-nix,
     }:
     let
       systems = [
@@ -41,6 +51,10 @@
         system:
         import nixpkgs {
           inherit system;
+          overlays = [
+            # Provides mk-deps-cache, fake-git, deps-lock, clj-builder.
+            clj-nix.overlays.default
+          ];
         };
 
       penpotVersion = self.lib.mkPenpotVersion penpot;

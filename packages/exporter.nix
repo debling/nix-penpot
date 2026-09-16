@@ -5,7 +5,8 @@
 # Upstream builds this with a pnpm workspace + shadow-cljs and ships the
 # `target/` dir of exporter/scripts/build as the runtime bundle. This package
 # reproduces that bundle with everything materialized offline: node_modules
-# and maven/git deps come from fixed-output derivations, and chromium comes
+# from a pre-fetched pnpm store and maven/git deps from the eval-time
+# clj-nix cache, and chromium comes
 # from nixpkgs instead of `playwright install`. (The render-wasm based
 # exporter rendering postdates the 2.17.x line this package tracks, so the
 # wasm artifacts are not consumed here.)
@@ -20,7 +21,6 @@
   pnpm_11,
   fetchPnpmDeps,
   pnpmConfigHook,
-  git,
   clojure,
   jdk25_headless,
   chromium,
@@ -71,20 +71,9 @@ let
     hash = "sha256-vDZfXXzx4SDhSBdEFq/fQ1WJ3pleFz3QQIU8cSQ53rs=";
   };
 
-  # Maven + tools.deps git dependencies (exporter/deps.edn pulls in
-  # ../common, whose deps.edn has a git dependency), fetched once in a
-  # fixed-output derivation.
-  mavenDeps = (callPackage ./maven-deps.nix { }).mkMavenDeps {
-    pname = "penpot-exporter";
-    inherit version;
-    src = subSrc penpot [
-      "exporter"
-      "common"
-    ];
-    workDir = "exporter";
-    warmAliases = [ "-M:dev" ];
-    outputHash = "sha256-0WBDh+leRpDyQtdtrQ2tDs5Kbn83ENurHKGXZqKWtZI=";
-  };
+  # Offline Clojure dependencies: eval-time cache from deps-lock.json
+  # (no fixed-output derivation) + fake-git shim + short-SHA expansion.
+  cljOffline = callPackage ./clj-offline.nix { };
 
   magickPolicy = callPackage ./imagemagick-policy.nix { inherit penpot; };
 
@@ -124,7 +113,8 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     clojureJdk25
-    git
+    cljOffline.fake-git
+    cljOffline.clj-builder
     makeWrapper
     nodejs_24
     pnpm_11
@@ -144,21 +134,17 @@ stdenv.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
 
+    # Offline clojure dependency caches for the shadow-cljs release build.
+    # Runs at the source root so patch-git-sha sees exporter/deps.edn and
+    # common/deps.edn. The JVM resolves user.home from /etc/passwd rather
+    # than $HOME; force it so tools.deps resolves from the eval-time cache
+    # instead of attempting network downloads.
+    ${cljOffline.setup}
+
     cd exporter
 
     # Materialize node_modules offline from the pre-fetched pnpm store.
     pnpmConfigHook
-
-    # Offline clojure dependency caches for the shadow-cljs release build.
-    export HOME=$TMPDIR/home
-    mkdir -p $HOME
-    cp -a ${mavenDeps}/m2 $HOME/.m2
-    cp -a ${mavenDeps}/gitlibs $HOME/.gitlibs
-    # The JVM resolves user.home from /etc/passwd rather than $HOME; force it
-    # so tools.deps resolves from the pre-seeded .m2/.gitlibs instead of
-    # attempting network downloads.
-    export JAVA_TOOL_OPTIONS="-Duser.home=$HOME"
-    export GITLIBS=$HOME/.gitlibs
 
     clojure -M:dev:shadow-cljs release main
 
