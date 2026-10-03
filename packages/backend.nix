@@ -3,6 +3,10 @@
 # through `clojure.main`, shipped with the log4j2 config and the onboarding
 # template files mapped from the pinned penpot-files flake input.
 #
+# The uberjar is repacked by packages/jar-strip-deterministic.py (in the penpot
+# checkout), replacing stripJavaArchivesHook, whose reorder is O(n^2) and took
+# ~32 minutes on this jar.
+#
 # Output contract:
 #   $out/share/penpot-backend/{penpot.jar,log4j2.xml,version.txt,manage.py}
 #   $out/share/penpot-backend/builtin-templates/
@@ -20,14 +24,27 @@
   fontforge,
   woff2,
   fontconfig,
+  util-linux,
   python3,
-  stripJavaArchivesHook,
   penpot,
   penpot-files,
   version,
   subSrc,
 }:
 
+let
+  src = subSrc penpot [
+    "backend"
+    "common"
+    "CHANGES.md"
+  ];
+
+  # Replaces stripJavaArchivesHook: a stdlib-python deterministic repack of the
+  # uberjar, replicating strip-nondeterminism's jar/zip handlers (see the
+  # script's docstring for the full list). Its per-member reorder is O(n^2),
+  # which cost ~32 minutes on this jar's 54000 entries; this does it in ~20 s.
+  jarNormalizer = ./jar-strip-deterministic.py;
+in
 let
   # sfnt2woff/woff2sfnt are not in nixpkgs; see backend-woff-tools.nix.
   woff-tools = callPackage ./backend-woff-tools.nix { };
@@ -38,14 +55,6 @@ let
 
   magickPolicy = callPackage ./imagemagick-policy.nix { inherit penpot; };
 
-  # The jar build needs `backend/`, its `:local/root` dependency `common/`,
-  # and the root `CHANGES.md` (bundled into the jar as changelog.md).
-  src = subSrc penpot [
-    "backend"
-    "common"
-    "CHANGES.md"
-  ];
-
   pythonEnv = python3.withPackages (ps: [ ps.tabulate ]);
 
   # NOTE: upstream's docker image runs Zulu JDK 26 at 2.17.x; any JDK >= 24
@@ -53,12 +62,15 @@ let
   # when bumping the penpot input.
   # Binaries the backend shells out to at runtime (image/font processing),
   # baked into the wrapper's PATH.
+  # util-linux: provides prlimit; upstream runs font-processing subprocesses
+  # under it (app.media.local/exec-font!), see also app.util.shell/prlimit-cmd.
   runtimeBinPath = lib.makeBinPath [
     imagemagick
     fontforge
     woff2
     woff-tools
     fontconfig
+    util-linux
   ];
 
   # Offline Clojure dependencies: eval-time cache from deps-lock.json
@@ -139,9 +151,10 @@ stdenv.mkDerivation {
     cljOffline.fake-git
     cljOffline.clj-builder
     makeWrapper
-    # Repacks the jar deterministically during fixup (the uber task stamps
-    # entries with wall-clock time).
-    stripJavaArchivesHook
+    # Repacks the jar deterministically during fixup. Replaces
+    # stripJavaArchivesHook, whose O(n^2) member reorder needs ~32 minutes on
+    # this jar (54000 entries); see jarNormalizer above.
+    python3
   ];
 
   configurePhase = ''
@@ -177,6 +190,10 @@ stdenv.mkDerivation {
         install -Dm644 backend/resources/log4j2.xml "$share/log4j2.xml"
         cp -r "${builtinTemplates}/templates" "$share/builtin-templates"
         echo "$version" > "$share/version.txt"
+
+        # Deterministic repack (see jarNormalizer). The uber task stamps
+        # entries with wall-clock time, so this can't be skipped.
+        python3 ${jarNormalizer} "$share/penpot.jar"
 
         # manage.py hardcodes the prepl endpoint as the argparse default; patch
         # it to honor the PREPL_URI environment variable instead.
