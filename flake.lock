@@ -115,16 +115,16 @@
     "penpot": {
       "flake": false,
       "locked": {
-        "lastModified": 1787817613,
-        "narHash": "sha256-9WZxy24W4dmniPWdTf5TFhAYqNH/YpSVEiHDCxDR6N4=",
+        "lastModified": 1791289550,
+        "narHash": "sha256-K5PkVl/3+CTtmFIrHRG3kMzPlkZZA5QYeyXHzGVb9wI=",
         "owner": "penpot",
         "repo": "penpot",
-        "rev": "1d2c37e52c733f74017d90b0fd1ae2d074a5c33d",
+        "rev": "ff7a66f51938b2293260ea27a64e2c4e0833b5e3",
         "type": "github"
       },
       "original": {
         "owner": "penpot",
-        "ref": "2.17.2",
+        "ref": "2.18.3",
         "repo": "penpot",
         "type": "github"
       }

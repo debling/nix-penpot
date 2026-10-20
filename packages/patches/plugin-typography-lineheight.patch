@@ -1,0 +1,41 @@
+diff --git a/frontend/src/app/plugins/library.cljs b/frontend/src/app/plugins/library.cljs
+index c7895ef7..fda13133 100644
+--- a/frontend/src/app/plugins/library.cljs
++++ b/frontend/src/app/plugins/library.cljs
+@@ -440,7 +455,7 @@
+ 
+     :lineHeight
+     {:this true
+-     :get #(-> % u/proxy->library-typography :font-height)
++     :get #(-> % u/proxy->library-typography :line-height)
+      :set
+      (fn [self value]
+        (cond
+@@ -452,7 +467,7 @@
+ 
+          :else
+          (let [typo (-> (u/proxy->library-typography self)
+-                        (assoc :font-height value))]
++                        (assoc :line-height value))]
+            (st/emit! (dwl/update-typography typo file-id)))))}
+ 
+     :letterSpacing
+diff --git a/plugins/apps/plugin-api-test-suite/src/tests/library.test.ts b/plugins/apps/plugin-api-test-suite/src/tests/library.test.ts
+index 32da4f5a..4bb5d4d4 100644
+--- a/plugins/apps/plugin-api-test-suite/src/tests/library.test.ts
++++ b/plugins/apps/plugin-api-test-suite/src/tests/library.test.ts
+@@ -238,9 +267,14 @@ describe('Library', () => {
+     test('typography applies to a text shape', (ctx) => {
+       const typo = ctx.penpot.library.local.createTypography();
+       typo.fontSize = '22';
++      // `lineHeight` must be stored under `:line-height` (the key the rest of
++      // the app and the text attrs use), otherwise the applied typography
++      // silently keeps the shape's current line height.
++      typo.lineHeight = '1.5';
+       const t = text(ctx);
+       typo.applyToText(t);
+       expect(t.fontSize).toBe('22');
++      expect(t.lineHeight).toBe('1.5');
+     });
+ 
+     test('typography applies to a text range', (ctx) => {

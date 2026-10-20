@@ -9,6 +9,8 @@
   version,
   subSrc,
   stdenv,
+  stdenvNoCC,
+  runCommand,
   makeWrapper,
   nodejs_24,
   pnpm_11,
@@ -18,12 +20,27 @@
 let
   # Only the mcp/ workspace is needed from the Penpot source tree.
   mcpSrc = subSrc penpot [ "mcp" ];
+
+  # 2.18 adds a shared `storeDir: ../.pnpm-store` to the workspace's
+  # pnpm-workspace.yaml; our pnpm fetches are per-workspace fixed-output
+  # derivations, so strip the line before the fetch (postPatch strips the
+  # consumer copy).
+  # Named "source": stdenv's unpack of a directory source copies it to a
+  # dir named after `stripHash(src)`, and the fetch below relies on
+  # sourceRoot = "source/mcp" (matching the raw subSrc trees, which are
+  # also named "source" in the store).
+  mcpSrcP = runCommand "source" { } ''
+    mkdir "$out"
+    cp -r "${mcpSrc}"/. "$out"/
+    chmod -R u+w "$out"
+    find "$out" -name pnpm-workspace.yaml -exec sed -i '/^storeDir:/d' {} +
+  '';
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "penpot-mcp";
   inherit version;
 
-  src = mcpSrc;
+  src = mcpSrcP;
   # The filtered source tree keeps the upstream `mcp/` directory;
   # the workspace (pnpm-lock.yaml, pnpm-workspace.yaml) lives there.
   sourceRoot = "source/mcp";
@@ -35,8 +52,20 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) src sourceRoot;
     pnpm = pnpm_11;
     fetcherVersion = 4;
-    hash = "sha256-rg8R6uMtqg3uYoqgCCWB9vBkWeDi3fE0djbFfzRU67A=";
+    # The registry link can be slow; CLI config flags always win.
+    pnpmInstallFlags = [
+      "--config.fetch-timeout=120000"
+      "--config.fetch-retry-mintimeout=10000"
+      "--config.fetch-retry-maxtimeout=120000"
+    ];
+    hash = lib.fakeHash;
   };
+
+  # 2.18's shared pnpm store config would redirect the offline install away
+  # from the fetched store.
+  postPatch = ''
+    find . -name pnpm-workspace.yaml -exec sed -i '/^storeDir:/d' {} +
+  '';
 
   nativeBuildInputs = [
     makeWrapper

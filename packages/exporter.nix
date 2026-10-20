@@ -13,6 +13,7 @@
 {
   lib,
   stdenv,
+  runCommand,
   callPackage,
   penpot,
   version,
@@ -60,15 +61,35 @@ let
   # the browsers dir below.
   exporterSrc = subSrc penpot [ "exporter" ];
 
+  # Same storeDir workaround as frontend.nix: 2.18 adds a shared
+  # `storeDir: ../.pnpm-store` to the workspace's pnpm-workspace.yaml, which
+  # breaks the per-workspace fixed-output fetch and the offline install;
+  # strip it in this pre-fetch source copy (and again in the consumer build's
+  # postPatch below). Named "source" so the dir-source unpack lands where
+  # sourceRoot expects it.
+  exporterSrcP =
+    runCommand "source" { }
+      ''
+        mkdir "$out"
+        cp -r "${exporterSrc}"/. "$out"/
+        chmod -R u+w "$out"
+        find "$out" -name pnpm-workspace.yaml -exec sed -i '/^storeDir:/d' {} +
+      '';
+
   pnpmDeps = fetchPnpmDeps {
     pname = "penpot-exporter";
     inherit version;
-    src = exporterSrc;
+    src = exporterSrcP;
     sourceRoot = "source/exporter";
     pnpm = pnpm_11;
     # fetcherVersion 4 is required for pnpm 11 (older fetchers are rejected).
     fetcherVersion = 4;
-    hash = "sha256-vDZfXXzx4SDhSBdEFq/fQ1WJ3pleFz3QQIU8cSQ53rs=";
+    hash = lib.fakeHash;
+    pnpmInstallFlags = [
+      "--config.fetch-timeout=120000"
+      "--config.fetch-retry-mintimeout=10000"
+      "--config.fetch-retry-maxtimeout=120000"
+    ];
   };
 
   # Offline Clojure dependencies: eval-time cache from deps-lock.json
@@ -142,6 +163,10 @@ stdenv.mkDerivation (finalAttrs: {
     ${cljOffline.setup}
 
     cd exporter
+
+    # Strip 2.18's shared pnpm storeDir so the offline install uses the
+    # fetched store (see the note on exporterSrcP).
+    find .. -name pnpm-workspace.yaml -maxdepth 3 -exec sed -i '/^storeDir:/d' {} +
 
     # Materialize node_modules offline from the pre-fetched pnpm store.
     pnpmConfigHook

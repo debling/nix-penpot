@@ -1,0 +1,161 @@
+diff --git a/frontend/src/app/plugins/library.cljs b/frontend/src/app/plugins/library.cljs
+index c7895ef7..fda13133 100644
+--- a/frontend/src/app/plugins/library.cljs
++++ b/frontend/src/app/plugins/library.cljs
+@@ -10,6 +10,7 @@
+    [app.common.data.macros :as dm]
+    [app.common.files.variant :as cfv]
+    [app.common.geom.point :as gpt]
++   [app.common.path-names :as cpn]
+    [app.common.schema :as sm]
+    [app.common.types.color :as clr]
+    [app.common.types.component :as ctk]
+@@ -32,11 +33,25 @@
+    [app.plugins.utils :as u]
+    [app.util.object :as obj]
+    [beicon.v2.core :as rx]
++   [cuerdas.core :as str]
+    [potok.v2.core :as ptk]))
+ 
+ (declare lib-color-proxy)
+ (declare lib-typography-proxy)
+ 
++(defn- rename-path-name
++  "Compose the full path string used by the library rename events from an
++  item and a new name. A `value` that contains a path separator is
++  interpreted as an absolute path (matching the UI rename field); any
++  other value keeps the item's current path. This makes the setters
++  idempotent: assigning back a value read from `name`/`path` (e.g.
++  \"Group / Name\") no longer appends the current path again and moves
++  the element to a nested group on every set."
++  [item value]
++  (if (str/includes? value "/")
++    value
++    (cpn/merge-path-item (d/nilv (:path item) "") value)))
++
+ (defn lib-color-proxy? [p]
+   (obj/type-of? p "LibraryColorProxy"))
+ 
+@@ -60,7 +75,7 @@
+      :set
+      (fn [self value]
+        (cond
+-         (not (string? value))
++         (or (not (string? value)) (str/empty? value))
+          (u/not-valid plugin-id :name value)
+ 
+          (not (r/check-permission plugin-id "library:write"))
+@@ -68,7 +83,7 @@
+ 
+          :else
+          (let [color (u/proxy->library-color self)
+-               value (dm/str (d/nilv (:path color) "") " / " value)]
++               value (rename-path-name color value)]
+            (st/emit! (dwl/rename-color file-id id value)))))}
+ 
+     :path
+@@ -307,7 +322,7 @@
+      :set
+      (fn [self value]
+        (cond
+-         (not (string? value))
++         (or (not (string? value)) (str/empty? value))
+          (u/not-valid plugin-id :name value)
+ 
+          (not (r/check-permission plugin-id "library:write"))
+@@ -315,7 +330,7 @@
+ 
+          :else
+          (let [typo (u/proxy->library-typography self)
+-               value (dm/str (d/nilv (:path typo) "") " / " value)]
++               value (rename-path-name typo value)]
+            (st/emit! (-> (dwl/rename-typography file-id id value)
+                          (se/add-event plugin-id))))))}
+ 
+@@ -754,7 +769,7 @@
+      :set
+      (fn [self value]
+        (cond
+-         (not (string? value))
++         (or (not (string? value)) (str/empty? value))
+          (u/not-valid plugin-id :name value)
+ 
+          (not (r/check-permission plugin-id "library:write"))
+@@ -762,7 +777,7 @@
+ 
+          :else
+          (let [component (u/proxy->library-component self)
+-               value (dm/str (d/nilv (:path component) "") " / " value)]
++               value (rename-path-name component value)]
+            (st/emit! (dwv/rename-comp-or-variant-and-main id value)))))}
+ 
+     :path
+diff --git a/plugins/apps/plugin-api-test-suite/src/tests/library.test.ts b/plugins/apps/plugin-api-test-suite/src/tests/library.test.ts
+index 32da4f5a..4bb5d4d4 100644
+--- a/plugins/apps/plugin-api-test-suite/src/tests/library.test.ts
++++ b/plugins/apps/plugin-api-test-suite/src/tests/library.test.ts
+@@ -98,6 +98,22 @@ describe('Library', () => {
+       expect(color.opacity).toBeCloseTo(0.8, 2);
+     });
+ 
++    // The `name` setter must be idempotent. Assigning a value that already
++    // contains the path (the composite shown in the assets panel) must not
++    // append the current path again and nest the element deeper on each set.
++    test('color name with a path is idempotent', (ctx) => {
++      const color = ctx.penpot.library.local.createColor();
++      color.name = 'plugingroup/Name';
++      expect(color.path).toBe('plugingroup');
++      expect(color.name).toBe('Name');
++      color.name = 'plugingroup/Name';
++      expect(color.path).toBe('plugingroup');
++      expect(color.name).toBe('Name');
++      color.name = 'Simple';
++      expect(color.path).toBe('plugingroup');
++      expect(color.name).toBe('Simple');
++    });
++
+     test('library color converts to fill and stroke', (ctx) => {
+       const color = ctx.penpot.library.local.createColor();
+       color.color = '#123456';
+@@ -188,6 +204,19 @@ describe('Library', () => {
+       expect(typo.path).toBe('Text');
+     });
+ 
++    test('typography name with a path is idempotent', (ctx) => {
++      const typo = ctx.penpot.library.local.createTypography();
++      typo.name = 'Text/Heading';
++      expect(typo.path).toBe('Text');
++      expect(typo.name).toBe('Heading');
++      typo.name = 'Text/Heading';
++      expect(typo.path).toBe('Text');
++      expect(typo.name).toBe('Heading');
++      typo.name = 'Body';
++      expect(typo.path).toBe('Text');
++      expect(typo.name).toBe('Body');
++    });
++
+     test('typography plugin data round-trips', (ctx) => {
+       const typo = ctx.penpot.library.local.createTypography();
+       typo.setPluginData('k', 'v');
+@@ -279,6 +313,21 @@ describe('Library', () => {
+       expect(comp.path).toBe('Controls');
+     });
+ 
++    test('component name with a path is idempotent', (ctx) => {
++      const rect = ctx.penpot.createRectangle();
++      ctx.board.appendChild(rect);
++      const comp = ctx.penpot.library.local.createComponent([rect]);
++      comp.name = 'Controls/Button';
++      expect(comp.path).toBe('Controls');
++      expect(comp.name).toBe('Button');
++      comp.name = 'Controls/Button';
++      expect(comp.path).toBe('Controls');
++      expect(comp.name).toBe('Button');
++      comp.name = 'Input';
++      expect(comp.path).toBe('Controls');
++      expect(comp.name).toBe('Input');
++    });
++
+     test('component plugin data round-trips', (ctx) => {
+       const rect = ctx.penpot.createRectangle();
+       ctx.board.appendChild(rect);

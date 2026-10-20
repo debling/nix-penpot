@@ -20,6 +20,7 @@
   subSrc,
   stdenv,
   stdenvNoCC,
+  runCommand,
   nodejs_24,
   pnpm_11,
   clojure,
@@ -52,24 +53,46 @@ let
 
   # One pnpm store per workspace (fetched once, reused for the offline
   # installs in the main build via pnpmConfigHook).
+  #
+  # 2.18 adds a shared `storeDir: ../.pnpm-store` to every workspace's
+  # pnpm-workspace.yaml; our fetches and consumer installs are per-workspace,
+  # so strip that line before the fixed-output fetch (the main build removes
+  # it again in postPatch).
+  patchedPnpmSrc =
+    name: wsrc:
+    # Named "source" (see the note on `mcpSrcP` in mcp.nix): the deps FOD
+    # relies on the dir-source unpack landing at /build/source so that
+    # sourceRoot = "source/<workspace>" resolves.
+    runCommand "source" { } ''
+      mkdir "$out"
+      cp -r "${wsrc}"/. "$out"/
+      chmod -R u+w "$out"
+      find "$out" -name pnpm-workspace.yaml -exec sed -i '/^storeDir:/d' {} +
+    '';
+
   fetchWorkspaceDeps =
     pname: sourceRoot: wsrc: hash:
     fetchPnpmDeps {
       inherit pname sourceRoot hash;
       pnpm = pnpm_11;
       fetcherVersion = 4;
-      src = wsrc;
+      src = patchedPnpmSrc pname wsrc;
+      # The registry link can be slow; CLI config flags always win.
+      pnpmInstallFlags = [
+        "--config.fetch-timeout=120000"
+        "--config.fetch-retry-mintimeout=10000"
+        "--config.fetch-retry-maxtimeout=120000"
+      ];
     };
 
   frontendPnpmDeps =
     fetchWorkspaceDeps "penpot-frontend-frontend" "source/frontend" frontendSrc
-      "sha256-/2VKrkoBfNSQWh9MzN9zY8mZvKIIEtnuSyYxCOsWk94=";
+      lib.fakeHash;
   pluginsPnpmDeps =
     fetchWorkspaceDeps "penpot-frontend-plugins" "source/plugins" pluginsSrc
-      "sha256-4q5Mq+TgTU1l5BTdJZJ0F5falMIdQmGpw8t0LTh9g30=";
+      lib.fakeHash;
   mcpPnpmDeps =
-    fetchWorkspaceDeps "penpot-frontend-mcp" "source/mcp" mcpSrc
-      "sha256-rg8R6uMtqg3uYoqgCCWB9vBkWeDi3fE0djbFfzRU67A=";
+    fetchWorkspaceDeps "penpot-frontend-mcp" "source/mcp" mcpSrc lib.fakeHash;
 
   # Upstream's deps.edn passes --sun-misc-unsafe-memory-access=allow, which
   # needs a newer JDK than the one the clojure CLI wrapper ships with.
@@ -95,6 +118,13 @@ stdenvNoCC.mkDerivation {
   inherit version;
   inherit src;
 
+  # Local carries of upstream plugin API fixes (see the patches for the
+  # upstream issue references). Remove once the `penpot` input contains them.
+  patches = [
+    ./patches/plugin-library-name-path.patch
+    ./patches/plugin-typography-lineheight.patch
+  ];
+
   nativeBuildInputs = [
     nodejs_24
     pnpm_11
@@ -112,6 +142,9 @@ stdenvNoCC.mkDerivation {
 
   postPatch = ''
     ${pinDepsEdn}
+    # 2.18's shared pnpm store config would redirect the offline installs
+    # away from the fetched per-workspace stores.
+    find . -name pnpm-workspace.yaml -exec sed -i '/^storeDir:/d' {} +
   '';
 
   env = {
@@ -120,8 +153,9 @@ stdenvNoCC.mkDerivation {
     VERSION = version;
     # Upstream appends the wall-clock build time (VERSION_TAG =
     # "$VERSION-$BUILD_TS"); a plain version keeps the build deterministic
-    # while still busting caches.
-    VERSION_TAG = version;
+    # while still busting caches. TEMPORARY: the -fix suffix forces clients
+    # to fetch the patched bundle while the local patches are carried.
+    VERSION_TAG = "${version}-fix2";
     # _helpers.js embeds these in the bundle when set; pin them for
     # reproducibility (upstream exports the wall clock).
     BUILD_DATE = "Thu Jan 01 00:00:00 UTC 1970";

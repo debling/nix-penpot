@@ -11,7 +11,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    penpot.url = "github:penpot/penpot/2.17.2";
+    penpot.url = "github:penpot/penpot/2.18.3";
     penpot.flake = false;
 
     # Clojure dependency locking (deps-lock.json) + eval-time dep cache
@@ -57,7 +57,12 @@
           ];
         };
 
-      penpotVersion = self.lib.mkPenpotVersion penpot;
+      penpotVersion =
+        # Keep in sync with the `penpot` input pin. Upstream leaves
+        # package.json's version stale ("2.17.0" even for 2.18.3), so
+        # mkPenpotVersion's package.json read lies; pin the real release
+        # instead. Changing this also changes asset version-tag URLs.
+        "2.18.3";
     in
     {
       lib = {
