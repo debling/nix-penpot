@@ -217,7 +217,8 @@ let
   }
   // optionalAttrs (cfg.mcp.redisUri != null) {
     PENPOT_MCP_REDIS_URI = cfg.mcp.redisUri;
-  };
+  }
+  // cfg.environment;
 
   # --- Secret handling ------------------------------------------------------
   # All credentials are sourced from files through systemd's LoadCredential
