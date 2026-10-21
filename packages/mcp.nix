@@ -18,6 +18,15 @@
   pnpmConfigHook,
 }:
 let
+  # The wrapper must expand PENPOT_MCP_ARGS at RUNTIME (bash ${VAR:-…}),
+  # not at build time: the makeWrapper line below quotes this fragment so
+  # the build script hands makeWrapper the literal and the wrapper's
+  # runtime shell does the default-vs-override decision. NOTE: the empty
+  # string still counts as unset for ${VAR:-…} — overrides must be
+  # non-empty (e.g. a single space to run non-multi-user).
+  penpotMcpArgs = "\${PENPOT_MCP_ARGS:---multi-user}";
+in
+let
   # Only the mcp/ workspace is needed from the Penpot source tree.
   mcpSrc = subSrc penpot [ "mcp" ];
 
@@ -101,7 +110,7 @@ stdenv.mkDerivation (finalAttrs: {
       --chdir $out/lib/penpot-mcp \
       --set-default PENPOT_MCP_SERVER_HOST 127.0.0.1 \
       --add-flags 'index.js' \
-      --add-flags ''${PENPOT_MCP_ARGS:---multi-user}
+      --add-flags '${penpotMcpArgs}'
 
     runHook postInstall
   '';
