@@ -52,13 +52,7 @@ stdenv.mkDerivation (finalAttrs: {
     inherit (finalAttrs) src sourceRoot;
     pnpm = pnpm_11;
     fetcherVersion = 4;
-    # The registry link can be slow; CLI config flags always win.
-    pnpmInstallFlags = [
-      "--config.fetch-timeout=120000"
-      "--config.fetch-retry-mintimeout=10000"
-      "--config.fetch-retry-maxtimeout=120000"
-    ];
-    hash = lib.fakeHash;
+    hash = "sha256-99ef/Qk3tx+etEqepQQVqAW3XL7T1Kr6qQJ7Uxf1z0Y=";
   };
 
   # 2.18's shared pnpm store config would redirect the offline install away

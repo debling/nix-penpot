@@ -77,22 +77,17 @@ let
       pnpm = pnpm_11;
       fetcherVersion = 4;
       src = patchedPnpmSrc pname wsrc;
-      # The registry link can be slow; CLI config flags always win.
-      pnpmInstallFlags = [
-        "--config.fetch-timeout=120000"
-        "--config.fetch-retry-mintimeout=10000"
-        "--config.fetch-retry-maxtimeout=120000"
-      ];
     };
 
   frontendPnpmDeps =
     fetchWorkspaceDeps "penpot-frontend-frontend" "source/frontend" frontendSrc
-      lib.fakeHash;
+      "sha256-D68mWhWs+PX+1ysXHI05SGZtLAXAx8TAAs+qZZHGOKE=";
   pluginsPnpmDeps =
     fetchWorkspaceDeps "penpot-frontend-plugins" "source/plugins" pluginsSrc
-      lib.fakeHash;
+      "sha256-Tq6aSL0lHFCfQo5H94d+XNGeY2oMNYG2J8YOQhYl3T8=";
   mcpPnpmDeps =
-    fetchWorkspaceDeps "penpot-frontend-mcp" "source/mcp" mcpSrc lib.fakeHash;
+    fetchWorkspaceDeps "penpot-frontend-mcp" "source/mcp" mcpSrc
+      "sha256-99ef/Qk3tx+etEqepQQVqAW3XL7T1Kr6qQJ7Uxf1z0Y=";
 
   # Upstream's deps.edn passes --sun-misc-unsafe-memory-access=allow, which
   # needs a newer JDK than the one the clojure CLI wrapper ships with.
@@ -232,7 +227,14 @@ stdenvNoCC.mkDerivation {
     runHook postInstall
   '';
 
-  passthru.version = version;
+  passthru = {
+    inherit
+      version
+      frontendPnpmDeps
+      pluginsPnpmDeps
+      mcpPnpmDeps
+      ;
+  };
 
   meta = {
     description = "Penpot frontend static bundle";
