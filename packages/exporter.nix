@@ -67,14 +67,12 @@ let
   # strip it in this pre-fetch source copy (and again in the consumer build's
   # postPatch below). Named "source" so the dir-source unpack lands where
   # sourceRoot expects it.
-  exporterSrcP =
-    runCommand "source" { }
-      ''
-        mkdir "$out"
-        cp -r "${exporterSrc}"/. "$out"/
-        chmod -R u+w "$out"
-        find "$out" -name pnpm-workspace.yaml -exec sed -i '/^storeDir:/d' {} +
-      '';
+  exporterSrcP = runCommand "source" { } ''
+    mkdir "$out"
+    cp -r "${exporterSrc}"/. "$out"/
+    chmod -R u+w "$out"
+    find "$out" -name pnpm-workspace.yaml -exec sed -i '/^storeDir:/d' {} +
+  '';
 
   pnpmDeps = fetchPnpmDeps {
     pname = "penpot-exporter";
@@ -84,12 +82,7 @@ let
     pnpm = pnpm_11;
     # fetcherVersion 4 is required for pnpm 11 (older fetchers are rejected).
     fetcherVersion = 4;
-    hash = lib.fakeHash;
-    pnpmInstallFlags = [
-      "--config.fetch-timeout=120000"
-      "--config.fetch-retry-mintimeout=10000"
-      "--config.fetch-retry-maxtimeout=120000"
-    ];
+    hash = "sha256-A9XrqiWVcIchEBEB/GHHx8u7LvQtkHH1mVa+s2SZp6o=";
   };
 
   # Offline Clojure dependencies: eval-time cache from deps-lock.json
@@ -219,7 +212,9 @@ stdenv.mkDerivation (finalAttrs: {
     runHook postInstall
   '';
 
-  passthru.version = finalAttrs.version;
+  passthru = {
+    inherit (finalAttrs) version pnpmDeps;
+  };
 
   meta = {
     description = "Penpot exporter service (headless design export via Chromium)";

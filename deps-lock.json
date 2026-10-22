@@ -55,6 +55,32 @@
    "rev": "05590ecb5f6fa670856f3d1ab400aa4961047480",
    "git-dir": "https/github.com/noprompt/garden",
    "hash": "sha256-tJmzBNBzh0xGovNghIBAIoYe39LZt/JpvtX1ev/rSfk="
+  },
+  {
+   "lib": "funcool/beicon2",
+   "url": "https://github.com/funcool/beicon.git",
+   "rev": "e7135e040c7bb72f4dee4eb758c7964fe9274c1d",
+   "tag": "v2.0",
+   "git-dir": "https/github.com/funcool/beicon",
+   "hash": "sha256-yRH+vjtozGWMKfgq1odWMLwphPFsP8cgRIln+Vas3D0=",
+   "ancestor?": {
+    "8744c664a96f5edddda7420deea46228ccf1f78c": true
+   }
+  },
+  {
+   "lib": "funcool/promesa",
+   "url": "https://github.com/funcool/promesa",
+   "rev": "46048fc0d4bf5466a2a4121f5d52aefa6337f2e8",
+   "git-dir": "https/github.com/funcool/promesa",
+   "hash": "sha256-+2L/kwFaL7RoNLp1ZnuxW0dsDKnzeHw/do1ay/EfKL8="
+  },
+  {
+   "lib": "funcool/yetti",
+   "url": "https://github.com/funcool/yetti.git",
+   "rev": "88701f41b126688b8d22605fa3ea924878e78934",
+   "tag": "v11.10",
+   "git-dir": "https/github.com/funcool/yetti",
+   "hash": "sha256-fTTjC0YtLoqU8CdPwX4JYlW5cS+K1DSgx5xHIac7IzM="
   }
  ],
  "mvn-deps": [
